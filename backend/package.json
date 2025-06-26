@@ -1,0 +1,26 @@
+{
+  "name": "sentinel-os-backend",
+  "version": "1.0.0",
+  "description": "Backend for Sentinel OS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.10.0",
+    "cohere-ai": "^7.17.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.4.1",
+    "node-cron": "^4.1.1",
+    "openai": "^4.104.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.2"
+  }
+}

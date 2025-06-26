@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.pulsing-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--dot-color, #F44336);
+  position: relative;
+  box-shadow: 0 0 0 2px #fff;
+  cursor: pointer;
+}
+.pulsing-marker::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  background: var(--pulse-color, #F44336);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.5;
+  animation: pulse 1.5s infinite;
+  z-index: -1;
+}
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.5;
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(2.5);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.5);
+    opacity: 0;
+  }
+}
