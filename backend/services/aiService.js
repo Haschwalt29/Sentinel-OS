@@ -1,12 +1,13 @@
 require("dotenv").config({ path: __dirname + "/../.env.dev" });
 const { CohereClient } = require('cohere-ai');
-const cohere = new CohereClient({ token: process.env.COHERE_API_KEY });
+
+// Initialize Cohere client properly
+const cohere = new CohereClient({
+  token: process.env.COHERE_API_KEY
+});
 
 async function askAI(prompt) {
   try {
-    const { default: cohere } = await import("cohere-ai"); // 👈 dynamically import ESM
-    cohere.apiKey = process.env.COHERE_API_KEY;
-
     const response = await cohere.generate({
       model: "command",
       prompt,
@@ -14,7 +15,7 @@ async function askAI(prompt) {
       temperature: 0.8,
     });
 
-    return response.body.generations[0].text.trim();
+    return response.generations[0].text.trim();
   } catch (err) {
     console.error("🛑 Cohere error:", err.message);
     return "Sorry, I couldn't process that.";
@@ -44,31 +45,61 @@ async function classifyText(title, content) {
 }
 
 /**
- * Extracts location entities from text using Cohere's NER model.
+ * Extracts location entities from text using Cohere's generate model.
  * @param {string} text - The text to analyze.
  * @returns {Promise<string[]>} - An array of unique location names.
  */
 async function extractLocations(text) {
   try {
     console.log('NER: Extracting locations...');
-    const response = await cohere.extract({
-      text,
-      model: 'extract-english-v1',
+    
+    // Use generate model for NER extraction
+    const prompt = `Extract all location names (cities, countries, regions, landmarks) from the following text. Return ONLY a JSON array of location names, no other text:
+
+Text: ${text}
+
+Locations:`;
+
+    const response = await cohere.generate({
+      model: "command",
+      prompt: prompt,
+      max_tokens: 200,
+      temperature: 0.1,
     });
 
-    const locations = response.extractions
-      .filter(ext => ext.type === 'LOC')
-      .map(ext => ext.text);
-
-    const uniqueLocations = [...new Set(locations)]; // Remove duplicates
+    const result = response.generations[0].text.trim();
     
-    if(uniqueLocations.length > 0) {
-        console.log(`NER: Found locations: ${uniqueLocations.join(', ')}`);
-    } else {
-        console.log('NER: No locations found.');
+    // Try to parse as JSON array
+    try {
+      const locations = JSON.parse(result);
+      if (Array.isArray(locations)) {
+        const uniqueLocations = [...new Set(locations)]; // Remove duplicates
+        
+        if(uniqueLocations.length > 0) {
+            console.log(`NER: Found locations: ${uniqueLocations.join(', ')}`);
+        } else {
+            console.log('NER: No locations found.');
+        }
+        
+        return uniqueLocations;
+      }
+    } catch (parseError) {
+      // If JSON parsing fails, try to extract locations from text
+      console.log('NER: JSON parsing failed, extracting from text...');
+      const locationPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g;
+      const matches = result.match(locationPattern) || [];
+      const uniqueLocations = [...new Set(matches)];
+      
+      if(uniqueLocations.length > 0) {
+          console.log(`NER: Found locations: ${uniqueLocations.join(', ')}`);
+      } else {
+          console.log('NER: No locations found.');
+      }
+      
+      return uniqueLocations;
     }
     
-    return uniqueLocations;
+    return [];
   } catch (err) {
     console.error('Cohere extractLocations error:', err);
     return []; // Return empty array on error

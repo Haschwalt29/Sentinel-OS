@@ -5,6 +5,7 @@ import LiveFeed from '../components/LiveFeed';
 const Dashboard = () => {
   const [filters, setFilters] = useState({
     threatLevel: 'all',
+    type: 'all',
     sortBy: 'createdAt',
     // Add other filters here as needed, e.g., timeRange: 'all'
   });

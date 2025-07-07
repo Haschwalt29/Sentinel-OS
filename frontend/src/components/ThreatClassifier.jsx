@@ -12,6 +12,8 @@ const badgeColors = {
 export default function ThreatClassifier() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [type, setType] = useState('global');
+  const [region, setRegion] = useState('');
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,6 +27,8 @@ export default function ThreatClassifier() {
       const res = await axios.post('http://localhost:5000/api/ai/classify-news', {
         title,
         content,
+        type,
+        region,
         lat,
         lng
       });
@@ -70,6 +74,30 @@ export default function ThreatClassifier() {
             />
           </div>
           <div className="flex space-x-4">
+            <div className="flex-1">
+              <label className="block text-gray-300 mb-1 font-medium">Threat Type</label>
+              <select
+                className="w-full px-3 py-2 rounded bg-gray-800 text-gray-100 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                value={type}
+                onChange={e => setType(e.target.value)}
+                required
+              >
+                <option value="global">Global</option>
+                <option value="local">Local</option>
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-gray-300 mb-1 font-medium">Region</label>
+              <input
+                type="text"
+                className="w-full px-3 py-2 rounded bg-gray-800 text-gray-100 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                value={region}
+                onChange={e => setRegion(e.target.value)}
+                placeholder="e.g., USA > California"
+              />
+            </div>
+          </div>
+          <div className="flex space-x-4">
             <div>
               <label className="block text-gray-300 mb-1 font-medium">Latitude</label>
               <input
@@ -77,7 +105,6 @@ export default function ThreatClassifier() {
                 className="w-full px-3 py-2 rounded bg-gray-800 text-gray-100 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 value={lat}
                 onChange={e => setLat(e.target.value)}
-                required
                 placeholder="e.g., 34.0522"
               />
             </div>
@@ -88,7 +115,6 @@ export default function ThreatClassifier() {
                 className="w-full px-3 py-2 rounded bg-gray-800 text-gray-100 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 value={lng}
                 onChange={e => setLng(e.target.value)}
-                required
                 placeholder="e.g., -118.2437"
               />
             </div>

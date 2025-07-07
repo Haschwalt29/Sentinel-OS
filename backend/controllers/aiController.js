@@ -5,9 +5,14 @@ const { geocodeLocation } = require('../utils/geocode');
 // POST /api/ai/classify-news
 async function classifyNews(req, res) {
   try {
-    const { title, content } = req.body;
+    const { title, content, type = 'global', region } = req.body;
     if (!title || !content) {
       return res.status(400).json({ error: 'Missing required fields: title and content' });
+    }
+
+    // Validate type
+    if (!['global', 'local'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid type. Must be "global" or "local"' });
     }
 
     // 1. Classify the threat
@@ -19,6 +24,7 @@ async function classifyNews(req, res) {
     // 2. Extract locations using NER
     const locations = await extractLocations(content);
     let coordinates = null;
+    let finalRegion = region;
 
     // 3. Geocode the first valid location found
     if (locations && locations.length > 0) {
@@ -26,6 +32,9 @@ async function classifyNews(req, res) {
         const coords = await geocodeLocation(loc);
         if (coords) {
           coordinates = coords;
+          if (!finalRegion) {
+            finalRegion = loc;
+          }
           break; // Stop after finding the first valid coordinate
         }
       }
@@ -37,6 +46,8 @@ async function classifyNews(req, res) {
       content,
       threatLevel: classificationResult.prediction,
       confidence: classificationResult.confidence,
+      type,
+      region: finalRegion || (type === 'global' ? 'Global' : 'Local'),
     };
     
     if (coordinates) {
@@ -45,6 +56,12 @@ async function classifyNews(req, res) {
 
     const newThreat = await Threat.create(threatData);
     console.log("Threat saved:", newThreat);
+    
+    // 5. Emit socket event for real-time updates
+    if (global.io) {
+      global.io.emit('new-threat', newThreat);
+      console.log('Emitted new-threat event:', newThreat._id);
+    }
     
     return res.json(classificationResult);
     

@@ -58,6 +58,12 @@ const fetchAndClassifyNews = async () => {
 
       await newThreat.save();
       console.log(`✅ Successfully saved threat: "${title}"`);
+      
+      // 5. Emit socket event for real-time updates
+      if (global.io) {
+        global.io.emit('new-threat', newThreat);
+        console.log('Emitted new-threat event from news ingestion:', newThreat._id);
+      }
     }
 
   } catch (error) {
