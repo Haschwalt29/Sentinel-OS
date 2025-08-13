@@ -8,10 +8,15 @@ const { startNewsIngestionService } = require('./services/newsIngestionService')
 const { startGlobalNewsFetcher } = require('./services/globalNewsFetcher');
 const { startLocalNewsFetcher } = require('./services/localNewsFetcher');
 
-// Load env vars from .env.dev
-dotenv.config({ path: __dirname + '/.env.dev' });
-console.log('OPENCAGE_API_KEY:', process.env.OPENCAGE_API_KEY);
+// Load env vars - try .env.dev first, then fall back to default dotenv behavior
+try {
+  dotenv.config({ path: __dirname + '/.env.dev' });
+} catch (error) {
+  // If .env.dev doesn't exist, use default dotenv behavior
+  dotenv.config();
+}
 
+console.log('Environment loaded. OPENCAGE_API_KEY present:', !!process.env.OPENCAGE_API_KEY);
 
 // Connect to database
 connectDB();
@@ -24,11 +29,12 @@ startLocalNewsFetcher(); // New local news fetcher
 const app = express();
 const server = createServer(app);
 
-// Initialize Socket.IO
+// Initialize Socket.IO with dynamic CORS
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173", // Frontend URL
-    methods: ["GET", "POST"]
+    origin: process.env.FRONTEND_URL || "http://localhost:5173", // Use environment variable
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -47,8 +53,20 @@ io.on('connection', (socket) => {
 // Body parser
 app.use(express.json());
 
-// Enable CORS
-app.use(cors());
+// Enable CORS with dynamic origin
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  credentials: true
+}));
+
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
 
 // Mount routers
 app.use('/api', require('./routes/api'));
@@ -57,6 +75,7 @@ const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  console.log(`Health check available at: http://localhost:${PORT}/health`);
 });
 
 // Handle unhandled promise rejections

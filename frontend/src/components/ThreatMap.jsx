@@ -5,6 +5,7 @@ import Supercluster from 'supercluster';
 import api from '../services/api';
 import socketService from '../services/socket';
 import PulsingMarker from './PulsingMarker';
+import { useNavigate } from 'react-router-dom';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiaGFzaGJyb3duMjkiLCJhIjoiY21jY2RwMHQyMDVyZzJ3cXdra2d4cmo0dCJ9.dAEPuHu86mpYBmsENGtZmw';
 
@@ -25,6 +26,7 @@ const ThreatMap = ({ filters }) => {
   });
   const [clusters, setClusters] = useState(null);
   const [clusterId, setClusterId] = useState(null);
+  const navigate = useNavigate();
 
   // Separate global and local threats
   const globalThreats = useMemo(() => 
@@ -253,9 +255,18 @@ const ThreatMap = ({ filters }) => {
             closeOnClick={false}
             className="z-10 bg-transparent"
           >
-             <div className="p-2 bg-gray-800 text-white rounded-lg shadow-xl border border-gray-700">
+            <div
+              className="p-2 bg-gray-800 text-white rounded-lg shadow-xl border border-gray-700 cursor-pointer hover:bg-cyan-900 transition-colors"
+              onClick={() => popupInfo.url ? window.open(popupInfo.url, '_blank', 'noopener,noreferrer') : undefined}
+              title={popupInfo.url ? 'Go to original news article' : 'No article URL available'}
+            >
               <h3 className="text-base font-bold text-cyan-400">{popupInfo.title}</h3>
               <p className="text-xs text-gray-300">{popupInfo.threatLevel}</p>
+              {popupInfo.url ? (
+                <p className="text-xs text-blue-300 mt-1 underline">Read original article</p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1 italic">No article link</p>
+              )}
             </div>
           </Popup>
         )}

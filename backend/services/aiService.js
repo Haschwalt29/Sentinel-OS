@@ -1,4 +1,11 @@
-require("dotenv").config({ path: __dirname + "/../.env.dev" });
+// Load environment variables - try .env.dev first, then fall back to default
+try {
+  require("dotenv").config({ path: __dirname + "/../.env.dev" });
+} catch (error) {
+  // If .env.dev doesn't exist, use default dotenv behavior
+  require("dotenv").config();
+}
+
 const { CohereClient } = require('cohere-ai');
 
 // Initialize Cohere client properly
