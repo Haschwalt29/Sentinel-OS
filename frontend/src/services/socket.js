@@ -11,7 +11,21 @@ class SocketService {
       return this.socket;
     }
 
-    this.socket = io('http://localhost:5000');
+    // Determine the socket URL based on environment
+    const getSocketURL = () => {
+      if (import.meta.env.PROD) {
+        // In production, use the Render backend URL
+        return import.meta.env.VITE_BACKEND_URL || 'https://your-render-url.onrender.com';
+      } else {
+        // In development, use localhost
+        return 'http://localhost:5000';
+      }
+    };
+
+    this.socket = io(getSocketURL(), {
+      withCredentials: true,
+      transports: ['websocket', 'polling']
+    });
     
     this.socket.on('connect', () => {
       console.log('Connected to server');

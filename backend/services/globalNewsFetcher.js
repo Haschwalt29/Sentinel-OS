@@ -22,9 +22,10 @@ const fetchAndClassifyGlobalNews = async () => {
     let processedCount = 0;
 
     for (const article of articles) {
-      const { title, content, source } = article;
+      const { title, content, description } = article;
+      const articleContent = content || description;
 
-      if (!title || !content) {
+      if (!title || !articleContent) {
         console.log(`⏩ Skipping global article with no title or content.`);
         continue;
       }
@@ -39,7 +40,7 @@ const fetchAndClassifyGlobalNews = async () => {
       console.log(`🧠 Classifying global article: "${title}"`);
       
       // Classify text using existing service
-      const classificationResult = await classifyText(title, content);
+      const classificationResult = await classifyText(title, articleContent);
       
       if (!classificationResult || !classificationResult.prediction) {
           console.error(`❌ Failed to classify global article: "${title}"`);
@@ -47,7 +48,7 @@ const fetchAndClassifyGlobalNews = async () => {
       }
       
       // Extract locations using NER
-      const locations = await extractLocations(content);
+      const locations = await extractLocations(articleContent);
       let coordinates = null;
       let region = null;
 
@@ -66,12 +67,13 @@ const fetchAndClassifyGlobalNews = async () => {
       // Save to database
       const newThreat = new Threat({
         title,
-        content,
+        content: articleContent,
         threatLevel: classificationResult.prediction,
         confidence: classificationResult.confidence,
         type: 'global',
         region: region || 'Global',
         coordinates,
+        url: article.url, // <-- Save the article URL
       });
 
       await newThreat.save();

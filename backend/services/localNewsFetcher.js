@@ -113,6 +113,7 @@ const fetchAndClassifyLocalNews = async () => {
             type: 'local',
             region: localRegion,
             coordinates,
+            url: article.url, // <-- Save the article URL
           });
 
           await newThreat.save();

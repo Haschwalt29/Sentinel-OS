@@ -5,9 +5,10 @@ const { geocodeLocation } = require('../utils/geocode');
 // POST /api/ai/classify-news
 async function classifyNews(req, res) {
   try {
-    const { title, content, type = 'global', region } = req.body;
-    if (!title || !content) {
-      return res.status(400).json({ error: 'Missing required fields: title and content' });
+    const { title, content, description, url, type = 'global', region } = req.body;
+    const articleContent = content || description;
+    if (!title || !articleContent) {
+      return res.status(400).json({ error: 'Missing required fields: title and content/description' });
     }
 
     // Validate type
@@ -16,13 +17,13 @@ async function classifyNews(req, res) {
     }
 
     // 1. Classify the threat
-    const classificationResult = await classifyText(title, content);
+    const classificationResult = await classifyText(title, articleContent);
     if (!classificationResult) {
       return res.status(500).json({ error: 'Failed to get classification result' });
     }
 
     // 2. Extract locations using NER
-    const locations = await extractLocations(content);
+    const locations = await extractLocations(articleContent);
     let coordinates = null;
     let finalRegion = region;
 
@@ -43,7 +44,7 @@ async function classifyNews(req, res) {
     // 4. Save the threat to the database
     const threatData = {
       title,
-      content,
+      content: articleContent,
       threatLevel: classificationResult.prediction,
       confidence: classificationResult.confidence,
       type,
@@ -52,6 +53,9 @@ async function classifyNews(req, res) {
     
     if (coordinates) {
       threatData.coordinates = coordinates;
+    }
+    if (url) {
+      threatData.url = url;
     }
 
     const newThreat = await Threat.create(threatData);

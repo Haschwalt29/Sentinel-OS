@@ -27,7 +27,8 @@ const ThreatSchema = new mongoose.Schema({
     required: false
   },
   verified: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  url: { type: String },
 });
 
 module.exports = mongoose.model('Threat', ThreatSchema); 
