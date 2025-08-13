@@ -3,7 +3,7 @@ services:
     name: sentinel-os-backend
     env: node
     plan: free
-    buildCommand: npm run build
+    buildCommand: chmod +x build.sh && ./build.sh
     startCommand: npm run start-direct
     envVars:
       - key: NODE_ENV
