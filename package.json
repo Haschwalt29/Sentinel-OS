@@ -1,5 +1,19 @@
 {
+  "name": "sentinel-os-prototype",
+  "version": "1.0.0",
+  "description": "Sentinel OS - AI-powered threat monitoring system",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "cd backend && npm start",
+    "start-direct": "cd backend && node server.js",
+    "build": "cd backend && npm install",
+    "dev": "cd backend && npm run dev",
+    "install-backend": "cd backend && npm install"
+  },
   "dependencies": {
     "mapbox-gl": "^3.13.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
