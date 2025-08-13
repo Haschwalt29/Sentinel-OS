@@ -40,7 +40,7 @@ Set these in your Render dashboard under Environment Variables:
 4. Configure the service:
    - **Name**: sentinel-os-backend
    - **Environment**: Node
-   - **Build Command**: `npm run build`
+   - **Build Command**: `chmod +x build.sh && ./build.sh`
    - **Start Command**: `npm run start-direct`
    - **Health Check Path**: `/health`
 
@@ -54,23 +54,27 @@ Click "Create Web Service" to start deployment.
 
 ### Common Issues
 
-1. **"Missing script: start" Error**
+1. **"Cannot find module 'express'" Error**
+   - **Solution**: The build script ensures backend dependencies are installed
+   - Make sure the `build.sh` script is executable and runs during build
+
+2. **"Missing script: start" Error**
    - **Solution**: Use `npm run start-direct` as the start command
    - This bypasses the need for npm start in the backend directory
 
-2. **Environment Variables Not Loading**
+3. **Environment Variables Not Loading**
    - Ensure all required env vars are set in Render dashboard
    - Check logs for missing variable errors
 
-3. **Database Connection Issues**
+4. **Database Connection Issues**
    - Verify MongoDB URI is correct
    - Ensure MongoDB Atlas IP whitelist includes Render's IPs
 
-4. **CORS Errors**
+5. **CORS Errors**
    - Set `FRONTEND_URL` to your actual frontend domain
    - Update frontend to use the new backend URL
 
-5. **API Key Issues**
+6. **API Key Issues**
    - Verify all API keys are valid and have sufficient credits
    - Check API rate limits
 
@@ -91,5 +95,14 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
 ## Build Process
 
 The deployment process works as follows:
-1. **Build**: `npm run build` → Installs dependencies in backend directory
-2. **Start**: `npm run start-direct` → Directly runs `node server.js` in backend directory 
+1. **Build**: `chmod +x build.sh && ./build.sh` → 
+   - Installs root dependencies
+   - Installs backend dependencies
+2. **Start**: `npm run start-direct` → Directly runs `node server.js` in backend directory
+
+## Alternative Build Commands
+
+If the build script doesn't work, you can also try these manual commands in Render:
+
+- **Build Command**: `npm install && cd backend && npm install`
+- **Start Command**: `cd backend && node server.js` 
