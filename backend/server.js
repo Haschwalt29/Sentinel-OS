@@ -4,12 +4,23 @@ const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 
-// Load env vars - try .env.dev first, then fall back to default dotenv behavior
+// Load env vars - try multiple environment files
 try {
+  // Try .env.dev first (for development)
   dotenv.config({ path: __dirname + '/.env.dev' });
 } catch (error) {
-  // If .env.dev doesn't exist, use default dotenv behavior
-  dotenv.config();
+  try {
+    // Try .env.local (alternative local file)
+    dotenv.config({ path: __dirname + '/.env.local' });
+  } catch (error2) {
+    try {
+      // Try .env (standard file)
+      dotenv.config({ path: __dirname + '/.env' });
+    } catch (error3) {
+      // If no env files exist, use default dotenv behavior
+      dotenv.config();
+    }
+  }
 }
 
 console.log('Environment loaded. OPENCAGE_API_KEY present:', !!process.env.OPENCAGE_API_KEY);
@@ -21,10 +32,14 @@ const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
   console.error('❌ Missing required environment variables:', missingEnvVars);
-  console.error('Please set these environment variables in your Render dashboard:');
+  console.error('Please set these environment variables:');
   missingEnvVars.forEach(varName => {
     console.error(`  - ${varName}`);
   });
+  console.error('');
+  console.error('For local development, create a .env file in the backend directory with:');
+  console.error('MONGODB_URI=mongodb://localhost:27017/sentinel-os');
+  console.error('');
   console.error('The server will start but database operations will fail.');
 }
 
@@ -115,6 +130,31 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || "http://localhost:5173",
   credentials: true
 }));
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Sentinel OS API',
+    version: '1.0.0',
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      articles: '/api/articles',
+      regions: '/api/regions',
+      region: '/api/region/:code',
+      fetchNews: '/api/fetch-news',
+      testThreats: '/api/test-threats',
+      testOpencage: '/api/test-opencage',
+      ai: '/api/ai',
+      admin: '/api/admin'
+    },
+    environment: process.env.NODE_ENV || 'development',
+    database: !!process.env.MONGODB_URI,
+    missingEnvVars: missingEnvVars
+  });
+});
 
 // Health check endpoint for Render
 app.get('/health', (req, res) => {
