@@ -1,18 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import Map, { Marker, Popup } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import Supercluster from 'supercluster';
+import { Globe, Map as MapIcon, Layers, Info, AlertTriangle } from 'lucide-react';
 import api from '../services/api';
 import socketService from '../services/socket';
 import PulsingMarker from './PulsingMarker';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiaGFzaGJyb3duMjkiLCJhIjoiY21jY2RwMHQyMDVyZzJ3cXdra2d4cmo0dCJ9.dAEPuHu86mpYBmsENGtZmw';
 
 const markerColors = {
-  'High Threat': '#F44336', // Red
-  'Medium Threat': '#FFC107', // Yellow
-  'No Threat': '#4CAF50',   // Green
+  'High Threat': '#FF4C4C',
+  'Medium Threat': '#FFB74D',
+  'Low Threat': '#FFD700',
+  'No Threat': '#4CAF50',
+};
+
+const threatLevelStyles = {
+  'High Threat': { bg: 'bg-threat-high', icon: 'text-threat-high' },
+  'Medium Threat': { bg: 'bg-threat-medium', icon: 'text-threat-medium' },
+  'Low Threat': { bg: 'bg-threat-low', icon: 'text-threat-low' },
+  'No Threat': { bg: 'bg-threat-none', icon: 'text-threat-none' },
 };
 
 const ThreatMap = ({ filters }) => {
@@ -26,6 +37,7 @@ const ThreatMap = ({ filters }) => {
   });
   const [clusters, setClusters] = useState(null);
   const [clusterId, setClusterId] = useState(null);
+  const [showLegend, setShowLegend] = useState(true);
   const navigate = useNavigate();
 
   // Separate global and local threats
@@ -136,10 +148,15 @@ const ThreatMap = ({ filters }) => {
               setPopupInfo(threat);
             }}
           >
-            <PulsingMarker 
-              color={markerColors[threat.threatLevel] || '#808080'} 
-              size={threat.threatLevel === 'High Threat' ? 'large' : 'medium'}
-            />
+            <motion.div
+              whileHover={{ scale: 1.2 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <PulsingMarker 
+                color={markerColors[threat.threatLevel] || '#808080'} 
+                size={threat.threatLevel === 'High Threat' ? 'large' : 'medium'}
+              />
+            </motion.div>
           </Marker>
         );
       } else {
@@ -164,17 +181,22 @@ const ThreatMap = ({ filters }) => {
               setPopupInfo(threat);
             }}
           >
-            <div 
-              className="local-marker"
-              style={{
-                backgroundColor: markerColors[threat.threatLevel] || '#808080',
-                width: '16px',
-                height: '16px',
-                borderRadius: '50%',
-                border: '2px solid white',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-              }}
-            />
+            <motion.div
+              whileHover={{ scale: 1.1 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <div 
+                className="local-marker"
+                style={{
+                  backgroundColor: markerColors[threat.threatLevel] || '#808080',
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  border: '2px solid rgba(255, 255, 255, 0.8)',
+                  boxShadow: `0 0 10px ${markerColors[threat.threatLevel] || '#808080'}40`,
+                }}
+              />
+            </motion.div>
           </Marker>
         );
       } else {
@@ -187,48 +209,107 @@ const ThreatMap = ({ filters }) => {
   return (
     <div className="w-full h-full relative">
       {/* Map Controls */}
-      <div className="absolute top-2 right-2 z-10 bg-gray-800 bg-opacity-75 rounded-md p-1 flex space-x-1">
-        <button
-          onClick={() => setProjection('globe')}
-          className={`px-3 py-1 text-sm font-medium rounded ${projection === 'globe' ? 'bg-cyan-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+      <motion.div 
+        className="absolute top-4 right-4 z-10 space-y-2"
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        {/* Projection Toggle */}
+        <div className="glass-effect rounded-lg p-1 flex space-x-1">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setProjection('globe')}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
+              projection === 'globe' 
+                ? 'bg-cyber-600 text-white shadow-lg' 
+                : 'bg-dark-800/50 text-gray-300 hover:bg-dark-700/50'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setProjection('mercator')}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${
+              projection === 'mercator' 
+                ? 'bg-cyber-600 text-white shadow-lg' 
+                : 'bg-dark-800/50 text-gray-300 hover:bg-dark-700/50'
+            }`}
+          >
+            <MapIcon className="w-4 h-4" />
+          </motion.button>
+        </div>
+
+        {/* Legend Toggle */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowLegend(!showLegend)}
+          className="glass-effect rounded-lg p-2 text-gray-300 hover:text-white transition-colors"
         >
-          Globe
-        </button>
-        <button
-          onClick={() => setProjection('mercator')}
-          className={`px-3 py-1 text-sm font-medium rounded ${projection === 'mercator' ? 'bg-cyan-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-        >
-          Map
-        </button>
-      </div>
+          <Layers className="w-4 h-4" />
+        </motion.button>
+      </motion.div>
+
       {/* Legend */}
-      <div className="absolute top-2 left-2 z-10 bg-gray-800 bg-opacity-75 rounded-md p-3 text-white text-sm">
-        <div className="font-semibold mb-2">Threat Types</div>
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
-            <span>Global Threats</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <span>Local Threats</span>
-          </div>
-        </div>
-        <div className="mt-3 space-y-1">
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 rounded-full bg-red-500"></div>
-            <span>High Threat</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-            <span>Medium Threat</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-            <span>No Threat</span>
-          </div>
-        </div>
-      </div>
+      <AnimatePresence>
+        {showLegend && (
+          <motion.div 
+            className="absolute top-4 left-4 z-10 glass-effect rounded-lg p-4 text-white"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ delay: 0.4 }}
+          >
+            <div className="flex items-center space-x-2 mb-3">
+              <Info className="w-4 h-4 text-cyber-300" />
+              <span className="text-sm font-semibold text-gray-200">Threat Legend</span>
+            </div>
+            
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs font-medium text-gray-300 mb-2">Threat Types</div>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-threat-high animate-pulse"></div>
+                    <span className="text-xs text-gray-300">Global Threats</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-threat-medium"></div>
+                    <span className="text-xs text-gray-300">Local Threats</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <div className="text-xs font-medium text-gray-300 mb-2">Severity Levels</div>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 rounded-full bg-threat-high"></div>
+                    <span className="text-xs text-gray-300">High Threat</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 rounded-full bg-threat-medium"></div>
+                    <span className="text-xs text-gray-300">Medium Threat</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 rounded-full bg-threat-low"></div>
+                    <span className="text-xs text-gray-300">Low Threat</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 rounded-full bg-threat-none"></div>
+                    <span className="text-xs text-gray-300">No Threat</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Map
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
@@ -255,19 +336,30 @@ const ThreatMap = ({ filters }) => {
             closeOnClick={false}
             className="z-10 bg-transparent"
           >
-            <div
-              className="p-2 bg-gray-800 text-white rounded-lg shadow-xl border border-gray-700 cursor-pointer hover:bg-cyan-900 transition-colors"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="glass-effect rounded-lg p-4 border border-cyber-500/30 cursor-pointer hover:bg-dark-800/80 transition-all"
               onClick={() => popupInfo.url ? window.open(popupInfo.url, '_blank', 'noopener,noreferrer') : undefined}
               title={popupInfo.url ? 'Go to original news article' : 'No article URL available'}
             >
-              <h3 className="text-base font-bold text-cyan-400">{popupInfo.title}</h3>
-              <p className="text-xs text-gray-300">{popupInfo.threatLevel}</p>
-              {popupInfo.url ? (
-                <p className="text-xs text-blue-300 mt-1 underline">Read original article</p>
-              ) : (
-                <p className="text-xs text-gray-400 mt-1 italic">No article link</p>
-              )}
-            </div>
+              <div className="flex items-start space-x-3">
+                <div className={`p-2 rounded-full ${threatLevelStyles[popupInfo.threatLevel]?.bg || 'bg-gray-600/20'}`}>
+                  <AlertTriangle className={`w-4 h-4 ${threatLevelStyles[popupInfo.threatLevel]?.icon || 'text-gray-400'}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-bold text-cyber-200 mb-1 line-clamp-2">{popupInfo.title}</h3>
+                  <p className="text-xs text-gray-400 mb-2">{popupInfo.threatLevel}</p>
+                  <p className="text-xs text-gray-300 line-clamp-2">{popupInfo.content}</p>
+                  {popupInfo.url ? (
+                    <p className="text-xs text-cyber-300 mt-2 underline">Click to read article</p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-2 italic">No article link</p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
           </Popup>
         )}
       </Map>
