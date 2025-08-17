@@ -3,8 +3,8 @@ import axios from 'axios';
 // Determine the base URL based on environment
 const getBaseURL = () => {
   if (import.meta.env.PROD) {
-    // In production, use the Render backend URL
-    return import.meta.env.VITE_BACKEND_URL || 'https://your-render-backend-url.onrender.com/api';
+    // In production, use the actual Render backend URL
+    return 'https://sentinel-os.onrender.com/api';
   } else {
     // In development, use the proxy
     return '/api';
