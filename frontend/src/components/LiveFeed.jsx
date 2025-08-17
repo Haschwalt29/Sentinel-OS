@@ -242,91 +242,61 @@ const LiveFeed = ({ filters, setFilters }) => {
           </motion.div>
         ) : (
           <AnimatePresence>
-                                                   <div className="space-y-2 w-full">
-              {threats.map((threat, index) => (
-                                 <motion.div
-                   key={threat._id}
-                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                   exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                   transition={{ 
-                     duration: 0.3, 
-                     delay: index * 0.05,
-                     type: "spring",
-                     stiffness: 100
-                   }}
-                   whileHover={{ scale: 1.01, y: -1 }}
-                                       className={`glass-effect rounded-lg p-3 border transition-all duration-200 w-full overflow-hidden live-feed-card ${
-                      threatLevelStyles[threat.threatLevel]?.border || 'border-gray-600/30'
-                    } ${threat.threatLevel === 'High Threat' ? 'animate-pulse-slow' : ''}`}
-                 >
-                                                                           {/* Header */}
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center space-x-2 min-w-0 flex-1">
-                        <div className={`p-1 rounded-full flex-shrink-0 ${threatLevelStyles[threat.threatLevel]?.bg || 'bg-gray-600/20'}`}>
-                          <AlertTriangle className={`w-3 h-3 ${threatLevelStyles[threat.threatLevel]?.icon || 'text-gray-400'}`} />
+              <div className="w-full">
+                {threats.map((threat, index) => (
+                  <motion.div
+                    key={threat._id}
+                    initial={{ x: -100, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: 100, opacity: 0 }}
+                    transition={{ 
+                      duration: 0.3,
+                      ease: "easeInOut"
+                    }}
+                    className={`border-l-4 mb-2 ${threatLevelStyles[threat.threatLevel]?.border || 'border-gray-600/30'}`}
+                  >
+                    <div className="pl-3 py-2 hover:bg-dark-800/30 transition-colors">
+                      {/* Threat title and time */}
+                      <div className="flex justify-between items-start mb-1">
+                        <h3 className="text-sm font-medium text-gray-200">{threat.title}</h3>
+                        <div className="flex items-center text-xs text-gray-400 ml-2 flex-shrink-0">
+                          <Clock className="w-3 h-3 mr-1" />
+                          <span>{formatTimeAgo(threat.createdAt)}</span>
                         </div>
-                                             <div className="flex items-center space-x-1 min-w-0 flex-wrap">
-                           <span className={`px-2 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${threatLevelStyles[threat.threatLevel]?.bg || 'bg-gray-600/20'} ${threatLevelStyles[threat.threatLevel]?.text || 'text-gray-400'}`}>
-                             {threat.threatLevel}
-                           </span>
-                           <div className="flex items-center space-x-1 min-w-0">
-                             {(() => {
-                               const TypeIcon = typeStyles[threat.type]?.icon || Globe;
-                               return (
-                                 <TypeIcon className={`w-3 h-3 flex-shrink-0 ${typeStyles[threat.type]?.text || 'text-gray-400'}`} />
-                               );
-                             })()}
-                             <span className={`text-xs font-medium ${typeStyles[threat.type]?.text || 'text-gray-400'}`}>
-                               {threat.type}
-                             </span>
-                           </div>
-                         </div>
                       </div>
-                      <div className="flex items-center space-x-1 text-xs text-gray-400 flex-shrink-0 ml-2">
-                        <Clock className="w-3 h-3" />
-                        <span>{formatTimeAgo(threat.createdAt)}</span>
-                      </div>
-                    </div>
-
-                                                                           {/* Content */}
-                                         <div className="mb-3 w-full text-container">
-                       <h3 className="font-semibold text-gray-200 mb-2 text-sm leading-tight force-wrap w-full">{threat.title}</h3>
-                       <p className="text-xs text-gray-400 leading-relaxed force-wrap w-full line-clamp-2">{threat.content}</p>
-                     </div>
-
-                                                                           {/* Footer */}
-                    <div className="flex items-center justify-between">
-                                           <div className="flex items-center space-x-2 text-xs text-gray-400 min-w-0 flex-1 flex-wrap">
-                         <div className="flex items-center space-x-1 min-w-0">
-                           <MapPin className="w-3 h-3 flex-shrink-0" />
-                           <span className="truncate max-w-20">{threat.region || 'Unknown'}</span>
-                         </div>
-                         <div className="flex items-center space-x-1 flex-shrink-0">
-                           <span>Confidence:</span>
-                           <span className="font-mono text-cyber-300">{(threat.confidence * 100).toFixed(1)}%</span>
-                         </div>
-                       </div>
                       
-                      <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                      {/* Metadata row */}
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-2">
+                          {/* Threat level */}
+                          <span className={`${threatLevelStyles[threat.threatLevel]?.text || 'text-gray-400'}`}>
+                            {threat.threatLevel}
+                          </span>
+                          
+                          {/* Region */}
+                          <div className="flex items-center">
+                            <MapPin className="w-3 h-3 mr-1" />
+                            <span className="text-gray-400">{threat.region || 'Unknown'}</span>
+                          </div>
+                        </div>
+                        
+                        {/* External link */}
                         {threat.url && (
-                          <motion.a
+                          <a
                             href={threat.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="p-1 text-cyber-400 hover:text-cyber-300 transition-colors"
+                            className="text-cyber-400 hover:text-cyber-300"
                             title="View source"
                           >
-                            <ExternalLink className="w-4 h-4" />
-                          </motion.a>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
                         )}
                       </div>
                     </div>
-                </motion.div>
-              ))}
-            </div>
+                  </motion.div>
+                ))}
+              </div>
           </AnimatePresence>
         )}
       </div>

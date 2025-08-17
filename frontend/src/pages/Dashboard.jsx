@@ -46,32 +46,6 @@ const Dashboard = () => {
         transition={{ duration: 0.5 }}
       >
         <ThreatMap filters={filters} />
-        
-        {/* Map Overlay Controls */}
-        <div className="absolute top-4 left-4 z-10">
-          <motion.div 
-            className="glass-effect rounded-lg p-3 space-y-3"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <div className="text-xs font-semibold text-gray-300 mb-2">Quick Stats</div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400">Total Threats:</span>
-                <span className="text-cyber-300 font-mono">{globalStats.totalThreats}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400">High Level:</span>
-                <span className="text-threat-high font-mono">{globalStats.highThreats}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400">Active:</span>
-                <span className="text-threat-medium font-mono">{globalStats.mediumThreats}</span>
-              </div>
-            </div>
-          </motion.div>
-        </div>
       </motion.div>
 
       {/* Collapsible Side Panel */}

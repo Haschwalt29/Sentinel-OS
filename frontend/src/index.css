@@ -1,5 +1,41 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+/* Theme Support */
+:root {
+  /* Default dark theme colors */
+  --bg-primary: #0c1221;
+  --bg-secondary: #151d31;
+  --text-primary: #f3f4f6;
+  --text-secondary: #a1a1aa;
+  --accent-color: #3b82f6;
+}
 
+.dark-theme {
+  --bg-primary: #0c1221;
+  --bg-secondary: #151d31;
+  --text-primary: #f3f4f6;
+  --text-secondary: #a1a1aa;
+  --border-color: rgba(59, 130, 246, 0.2);
+}
+
+.light-theme {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #e2e8f0;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* Apply theme variables */
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.glass-effect {
+  background-color: var(--bg-secondary);
+  transition: background-color 0.3s ease;
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
