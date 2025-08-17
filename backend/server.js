@@ -104,7 +104,28 @@ const server = createServer(app);
 // Initialize Socket.IO with dynamic CORS
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173", // Use environment variable
+    origin: function(origin, callback) {
+      // Get the configured frontend URL from environment variable
+      let allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+      
+      // Normalize the allowedOrigin (remove trailing slash if present)
+      allowedOrigin = allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin;
+      
+      // Create versions with and without trailing slash
+      const originsToAllow = [
+        allowedOrigin,
+        allowedOrigin + '/'
+      ];
+      
+      // Allow requests with no origin (like mobile apps, curl, postman)
+      if (!origin || originsToAllow.includes(origin)) {
+        // Return the actual requesting origin, not a wildcard
+        callback(null, origin);
+      } else {
+        console.log(`Socket.IO CORS blocked request from: ${origin}`);
+        callback(null, false);
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -127,7 +148,28 @@ app.use(express.json());
 
 // Enable CORS with dynamic origin
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: function(origin, callback) {
+    // Get the configured frontend URL from environment variable
+    let allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+    
+    // Normalize the allowedOrigin (remove trailing slash if present)
+    allowedOrigin = allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin;
+    
+    // Create versions with and without trailing slash
+    const originsToAllow = [
+      allowedOrigin,
+      allowedOrigin + '/'
+    ];
+    
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin || originsToAllow.includes(origin)) {
+      // Return the actual requesting origin, not a wildcard
+      callback(null, origin);
+    } else {
+      console.log(`CORS blocked request from: ${origin}`);
+      callback(null, false);
+    }
+  },
   credentials: true
 }));
 
@@ -199,3 +241,6 @@ process.on('unhandledRejection', (err, promise) => {
   // Don't exit the process, just log the error
   console.log('Stack trace:', err.stack);
 }); 
+
+
+//
