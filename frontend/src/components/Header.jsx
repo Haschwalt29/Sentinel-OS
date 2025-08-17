@@ -237,21 +237,6 @@ const Header = () => {
             </motion.button>
           </motion.div>
         </div>
-
-        {/* Global Alert Banner */}
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          transition={{ delay: 0.5 }}
-          className="mt-3 p-3 bg-gradient-to-r from-threat-high/20 to-threat-medium/20 border border-threat-high/30 rounded-lg"
-        >
-          <div className="flex items-center space-x-2">
-            <AlertTriangle className="w-4 h-4 text-threat-high" />
-            <span className="text-sm text-gray-300">
-              <span className="font-semibold text-threat-high">3 Active High Threats</span> detected globally
-            </span>
-          </div>
-        </motion.div>
       </div>
     </motion.header>
   );
