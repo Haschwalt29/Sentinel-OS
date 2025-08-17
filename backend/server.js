@@ -104,7 +104,24 @@ const server = createServer(app);
 // Initialize Socket.IO with dynamic CORS
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:5173", // Use environment variable
+    origin: function(origin, callback) {
+      // Get the configured frontend URL from environment variable
+      const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+      
+      // Create versions with and without trailing slash
+      const originsToAllow = [
+        allowedOrigin,
+        allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin + '/'
+      ];
+      
+      // Allow requests with no origin (like mobile apps, curl, postman)
+      if (!origin || originsToAllow.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        console.log(`Socket.IO CORS blocked request from: ${origin}`);
+        callback(null, false);
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -127,7 +144,24 @@ app.use(express.json());
 
 // Enable CORS with dynamic origin
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: function(origin, callback) {
+    // Get the configured frontend URL from environment variable
+    const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+    
+    // Create versions with and without trailing slash
+    const originsToAllow = [
+      allowedOrigin,
+      allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin + '/'
+    ];
+    
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin || originsToAllow.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`CORS blocked request from: ${origin}`);
+      callback(null, false);
+    }
+  },
   credentials: true
 }));
 
