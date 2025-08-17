@@ -106,17 +106,21 @@ const io = new Server(server, {
   cors: {
     origin: function(origin, callback) {
       // Get the configured frontend URL from environment variable
-      const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+      let allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+      
+      // Normalize the allowedOrigin (remove trailing slash if present)
+      allowedOrigin = allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin;
       
       // Create versions with and without trailing slash
       const originsToAllow = [
         allowedOrigin,
-        allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin + '/'
+        allowedOrigin + '/'
       ];
       
       // Allow requests with no origin (like mobile apps, curl, postman)
-      if (!origin || originsToAllow.indexOf(origin) !== -1) {
-        callback(null, true);
+      if (!origin || originsToAllow.includes(origin)) {
+        // Return the actual requesting origin, not a wildcard
+        callback(null, origin);
       } else {
         console.log(`Socket.IO CORS blocked request from: ${origin}`);
         callback(null, false);
@@ -146,17 +150,21 @@ app.use(express.json());
 app.use(cors({
   origin: function(origin, callback) {
     // Get the configured frontend URL from environment variable
-    const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+    let allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+    
+    // Normalize the allowedOrigin (remove trailing slash if present)
+    allowedOrigin = allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin;
     
     // Create versions with and without trailing slash
     const originsToAllow = [
       allowedOrigin,
-      allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin + '/'
+      allowedOrigin + '/'
     ];
     
     // Allow requests with no origin (like mobile apps, curl, postman)
-    if (!origin || originsToAllow.indexOf(origin) !== -1) {
-      callback(null, true);
+    if (!origin || originsToAllow.includes(origin)) {
+      // Return the actual requesting origin, not a wildcard
+      callback(null, origin);
     } else {
       console.log(`CORS blocked request from: ${origin}`);
       callback(null, false);

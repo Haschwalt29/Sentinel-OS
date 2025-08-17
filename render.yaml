@@ -19,5 +19,5 @@ services:
       - key: GNEWS_API_KEY
         sync: false
       - key: FRONTEND_URL
-        value: https://your-frontend-domain.netlify.app
-    healthCheckPath: /health 
+        value: https://sentinel-os.vercel.app
+    healthCheckPath: /health
