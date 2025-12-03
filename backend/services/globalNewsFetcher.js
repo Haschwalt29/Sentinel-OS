@@ -3,11 +3,20 @@ const axios = require('axios');
 const { classifyText, extractLocations } = require('./aiService');
 const Threat = require('../models/Threat');
 const { getLocationCoordinates } = require('../utils/geocode');
+const { ensureConnection } = require('../utils/dbHelper');
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 
 const fetchAndClassifyGlobalNews = async () => {
   console.log('🌍 Starting global news ingestion cycle...');
+  
+  // Check database connection before proceeding
+  const isConnected = await ensureConnection(5000);
+  if (!isConnected) {
+    console.error('❌ Database not connected, skipping global news ingestion');
+    return;
+  }
+  
   try {
     const response = await axios.get(`https://newsapi.org/v2/top-headlines`, {
       params: {

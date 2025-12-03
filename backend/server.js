@@ -44,7 +44,7 @@ if (missingEnvVars.length > 0) {
 }
 
 // Import database connection
-const connectDB = require('./config/db');
+const { connectDB, waitForConnection } = require('./config/db');
 
 // Import news services (but don't start them if database is not available)
 let startNewsIngestionService, startGlobalNewsFetcher, startLocalNewsFetcher;
@@ -63,37 +63,52 @@ if (process.env.MONGODB_URI) {
   }
 }
 
-// Connect to database only if URI is available
+// Connect to database and start services asynchronously
+let dbConnected = false;
 if (process.env.MONGODB_URI) {
-  connectDB();
-  
-  // Start the news ingestion services only if database is connected
-  if (startNewsIngestionService) {
+  (async () => {
     try {
-      startNewsIngestionService();
-      console.log('✅ News ingestion service started');
+      const connected = await connectDB();
+      if (connected) {
+        // Wait for connection to be fully ready
+        await waitForConnection(30000); // Wait up to 30 seconds
+        dbConnected = true;
+        console.log('✅ Database connection confirmed, starting services...');
+        
+        // Start the news ingestion services only after database is connected
+        if (startNewsIngestionService) {
+          try {
+            startNewsIngestionService();
+            console.log('✅ News ingestion service started');
+          } catch (error) {
+            console.error('❌ Failed to start news ingestion service:', error.message);
+          }
+        }
+        
+        if (startGlobalNewsFetcher) {
+          try {
+            startGlobalNewsFetcher();
+            console.log('✅ Global news fetcher started');
+          } catch (error) {
+            console.error('❌ Failed to start global news fetcher:', error.message);
+          }
+        }
+        
+        if (startLocalNewsFetcher) {
+          try {
+            startLocalNewsFetcher();
+            console.log('✅ Local news fetcher started');
+          } catch (error) {
+            console.error('❌ Failed to start local news fetcher:', error.message);
+          }
+        }
+      } else {
+        console.error('❌ Database connection failed, services will not start');
+      }
     } catch (error) {
-      console.error('❌ Failed to start news ingestion service:', error.message);
+      console.error('❌ Error during database connection:', error.message);
     }
-  }
-  
-  if (startGlobalNewsFetcher) {
-    try {
-      startGlobalNewsFetcher();
-      console.log('✅ Global news fetcher started');
-    } catch (error) {
-      console.error('❌ Failed to start global news fetcher:', error.message);
-    }
-  }
-  
-  if (startLocalNewsFetcher) {
-    try {
-      startLocalNewsFetcher();
-      console.log('✅ Local news fetcher started');
-    } catch (error) {
-      console.error('❌ Failed to start local news fetcher:', error.message);
-    }
-  }
+  })();
 } else {
   console.log('⚠️  Skipping database connection and news services due to missing MONGODB_URI');
 }

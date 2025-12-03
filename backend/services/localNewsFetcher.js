@@ -3,12 +3,21 @@ const axios = require('axios');
 const { classifyText, extractLocations } = require('./aiService');
 const Threat = require('../models/Threat');
 const { getLocationCoordinates } = require('../utils/geocode');
+const { ensureConnection } = require('../utils/dbHelper');
 
 // For local news, we'll use GNews API (you'll need to add GNEWS_API_KEY to your .env)
 const GNEWS_API_KEY = process.env.GNEWS_API_KEY;
 
 const fetchAndClassifyLocalNews = async () => {
   console.log('🏘️ Starting local news ingestion cycle...');
+  
+  // Check database connection before proceeding
+  const isConnected = await ensureConnection(5000);
+  if (!isConnected) {
+    console.error('❌ Database not connected, skipping local news ingestion');
+    return;
+  }
+  
   try {
     // Define major cities/regions for local news monitoring
     const localRegions = [

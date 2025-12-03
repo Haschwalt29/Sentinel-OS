@@ -3,11 +3,20 @@ const axios = require('axios');
 const { classifyText } = require('./aiService');
 const Threat = require('../models/Threat');
 const { getRandomCoordinates } = require('../utils/countryCoordinates');
+const { ensureConnection } = require('../utils/dbHelper');
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 
 const fetchAndClassifyNews = async () => {
   console.log('📰 Starting news ingestion cycle...');
+  
+  // Check database connection before proceeding
+  const isConnected = await ensureConnection(5000);
+  if (!isConnected) {
+    console.error('❌ Database not connected, skipping news ingestion');
+    return;
+  }
+  
   try {
     const response = await axios.get(`https://newsapi.org/v2/top-headlines`, {
       params: {
