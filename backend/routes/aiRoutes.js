@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require('mongoose');
 const { askCohere } = require("../services/aiService");
 const ThreatReport = require('../models/ThreatReport');
 const { classifyNews } = require('../controllers/aiController');
@@ -36,8 +37,28 @@ router.post('/classify-news', classifyNews);
 
 // GET /api/ai/feed
 router.get('/feed', async (req, res) => {
+  // Set a timeout for the entire request
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error('[ERROR] Request timeout after 8 seconds');
+      res.status(504).json({ error: 'Request timeout', message: 'Database query took too long' });
+    }
+  }, 8000); // 8 second timeout (less than client's 10s timeout)
+
   try {
     console.log('[DEBUG] /api/ai/feed called with query:', req.query);
+    
+    // Check database connection state
+    if (mongoose.connection.readyState !== 1) {
+      clearTimeout(timeout);
+      console.error('[ERROR] Database not connected. ReadyState:', mongoose.connection.readyState);
+      return res.status(503).json({ 
+        error: 'Database not available', 
+        message: 'Database connection is not established. Please check server logs.',
+        readyState: mongoose.connection.readyState
+      });
+    }
+
     const { 
       threatLevel, 
       minConfidence,
@@ -61,6 +82,7 @@ router.get('/feed', async (req, res) => {
       if(allowedLevels.includes(threatLevel)) {
         query = query.where('threatLevel').equals(threatLevel);
       } else {
+        clearTimeout(timeout);
         console.error('[DEBUG] Invalid threatLevel:', threatLevel);
         return res.status(400).json({ error: "Invalid threatLevel" });
       }
@@ -72,8 +94,9 @@ router.get('/feed', async (req, res) => {
       if (!isNaN(confidence)) {
         query = query.where('confidence').gte(confidence);
       } else {
-         console.error('[DEBUG] Invalid minConfidence:', minConfidence);
-         return res.status(400).json({ error: "Invalid minConfidence, must be a number" });
+        clearTimeout(timeout);
+        console.error('[DEBUG] Invalid minConfidence:', minConfidence);
+        return res.status(400).json({ error: "Invalid minConfidence, must be a number" });
       }
     }
     
@@ -91,6 +114,7 @@ router.get('/feed', async (req, res) => {
           startDate.setDate(startDate.getDate() - 30);
           break;
         default:
+          clearTimeout(timeout);
           console.error('[DEBUG] Invalid timeRange:', timeRange);
           return res.status(400).json({ error: "Invalid timeRange. Use '24h', '7d', or '30d'" });
       }
@@ -103,16 +127,29 @@ router.get('/feed', async (req, res) => {
     console.log('[DEBUG] Applying sort options:', sortOptions);
     query = query.sort(sortOptions);
 
-    // 6. Apply limit
+    // 6. Apply limit and add maxTimeMS to prevent long-running queries
     console.log('[DEBUG] Final Mongoose query:', JSON.stringify(query.getQuery()), 'sort:', sortOptions);
-    const threats = await query.limit(50).exec();
+    const threats = await query.limit(50).maxTimeMS(7000).exec(); // 7 second max query time
     console.log('[DEBUG] Threats fetched:', threats.length);
     
+    clearTimeout(timeout);
     res.json(threats);
     
   } catch (err) {
+    clearTimeout(timeout);
     console.error('[ERROR] Error fetching feed:', err);
-    res.status(500).json({ error: 'Failed to fetch live feed', details: err.stack });
+    
+    // Handle specific MongoDB timeout errors
+    if (err.name === 'MongoServerError' && err.code === 50) {
+      return res.status(504).json({ error: 'Database query timeout', message: 'The query took too long to execute' });
+    }
+    
+    // Handle connection errors
+    if (err.name === 'MongooseError' || err.message.includes('connection')) {
+      return res.status(503).json({ error: 'Database connection error', message: err.message });
+    }
+    
+    res.status(500).json({ error: 'Failed to fetch live feed', details: err.message });
   }
 });
 
