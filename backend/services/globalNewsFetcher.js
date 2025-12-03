@@ -3,11 +3,20 @@ const axios = require('axios');
 const { classifyText, extractLocations } = require('./aiService');
 const Threat = require('../models/Threat');
 const { getLocationCoordinates } = require('../utils/geocode');
+const { ensureConnection } = require('../utils/dbHelper');
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 
 const fetchAndClassifyGlobalNews = async () => {
   console.log('🌍 Starting global news ingestion cycle...');
+  
+  // Check database connection before proceeding
+  const isConnected = await ensureConnection(5000);
+  if (!isConnected) {
+    console.error('❌ Database not connected, skipping global news ingestion');
+    return;
+  }
+  
   try {
     const response = await axios.get(`https://newsapi.org/v2/top-headlines`, {
       params: {
@@ -31,10 +40,18 @@ const fetchAndClassifyGlobalNews = async () => {
       }
 
       // Prevent duplicate headlines
-      const existingThreat = await Threat.findOne({ title });
-      if (existingThreat) {
-        console.log(`🚫 Duplicate global threat found, skipping: "${title}"`);
-        continue;
+      try {
+        const existingThreat = await Threat.findOne({ title }).maxTimeMS(5000);
+        if (existingThreat) {
+          console.log(`🚫 Duplicate global threat found, skipping: "${title}"`);
+          continue;
+        }
+      } catch (dbError) {
+        if (dbError.message && dbError.message.includes('buffering')) {
+          console.error('❌ Error checking duplicates: Database connection not ready');
+          throw dbError;
+        }
+        throw dbError;
       }
       
       console.log(`🧠 Classifying global article: "${title}"`);
@@ -76,8 +93,16 @@ const fetchAndClassifyGlobalNews = async () => {
         url: article.url, // <-- Save the article URL
       });
 
-      await newThreat.save();
-      console.log(`✅ Successfully saved global threat: "${title}"`);
+      try {
+        await newThreat.save();
+        console.log(`✅ Successfully saved global threat: "${title}"`);
+      } catch (saveError) {
+        if (saveError.message && saveError.message.includes('buffering')) {
+          console.error('❌ Error saving global threat: Database connection not ready');
+          throw saveError;
+        }
+        throw saveError;
+      }
       
       // Emit socket event for real-time updates
       if (global.io) {
