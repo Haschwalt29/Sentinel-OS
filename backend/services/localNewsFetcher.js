@@ -74,9 +74,18 @@ const fetchAndClassifyLocalNews = async () => {
           }
 
           // Prevent duplicate headlines
-          const existingThreat = await Threat.findOne({ title });
-          if (existingThreat) {
-            continue;
+          try {
+            const existingThreat = await Threat.findOne({ title }).maxTimeMS(5000);
+            if (existingThreat) {
+              continue;
+            }
+          } catch (dbError) {
+            // Handle buffering timeout or connection errors
+            if (dbError.message && dbError.message.includes('buffering')) {
+              console.error(`❌ Error processing ${region.name}: Database connection not ready`);
+              throw dbError; // Re-throw to exit the region processing
+            }
+            throw dbError; // Re-throw other errors
           }
           
           console.log(`🧠 Classifying local article from ${region.name}: "${title}"`);
@@ -125,8 +134,16 @@ const fetchAndClassifyLocalNews = async () => {
             url: article.url, // <-- Save the article URL
           });
 
-          await newThreat.save();
-          console.log(`✅ Successfully saved local threat from ${region.name}: "${title}"`);
+          try {
+            await newThreat.save();
+            console.log(`✅ Successfully saved local threat from ${region.name}: "${title}"`);
+          } catch (saveError) {
+            if (saveError.message && saveError.message.includes('buffering')) {
+              console.error(`❌ Error saving threat from ${region.name}: Database connection not ready`);
+              throw saveError;
+            }
+            throw saveError;
+          }
           
           // Emit socket event for real-time updates
           if (global.io) {

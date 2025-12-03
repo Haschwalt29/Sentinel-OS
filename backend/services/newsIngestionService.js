@@ -38,10 +38,18 @@ const fetchAndClassifyNews = async () => {
       }
 
       // 1. Prevent duplicate headlines
-      const existingThreat = await Threat.findOne({ title });
-      if (existingThreat) {
-        console.log(`🚫 Duplicate threat found, skipping: "${title}"`);
-        continue;
+      try {
+        const existingThreat = await Threat.findOne({ title }).maxTimeMS(5000);
+        if (existingThreat) {
+          console.log(`🚫 Duplicate threat found, skipping: "${title}"`);
+          continue;
+        }
+      } catch (dbError) {
+        if (dbError.message && dbError.message.includes('buffering')) {
+          console.error('❌ Error checking duplicates: Database connection not ready');
+          throw dbError;
+        }
+        throw dbError;
       }
       
       console.log(`🧠 Classifying article: "${title}"`);
@@ -65,8 +73,16 @@ const fetchAndClassifyNews = async () => {
         coordinates,
       });
 
-      await newThreat.save();
-      console.log(`✅ Successfully saved threat: "${title}"`);
+      try {
+        await newThreat.save();
+        console.log(`✅ Successfully saved threat: "${title}"`);
+      } catch (saveError) {
+        if (saveError.message && saveError.message.includes('buffering')) {
+          console.error('❌ Error saving threat: Database connection not ready');
+          throw saveError;
+        }
+        throw saveError;
+      }
       
       // 5. Emit socket event for real-time updates
       if (global.io) {

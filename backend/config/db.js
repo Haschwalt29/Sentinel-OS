@@ -46,6 +46,20 @@ const connectDB = async () => {
     return true;
   } catch (error) {
     console.error(`❌ Database connection error: ${error.message}`);
+    
+    // Check for specific error types
+    if (error.message.includes('ENOTFOUND') || error.message.includes('querySrv')) {
+      console.error('❌ DNS resolution failed. Check your MongoDB URI and network connectivity.');
+      console.error('   This usually means:');
+      console.error('   1. The MongoDB cluster URL is incorrect');
+      console.error('   2. Network/DNS issues preventing SRV record lookup');
+      console.error('   3. MongoDB Atlas cluster may have been deleted or changed');
+    } else if (error.message.includes('authentication')) {
+      console.error('❌ Authentication failed. Check your MongoDB username and password.');
+    } else if (error.message.includes('timeout')) {
+      console.error('❌ Connection timeout. Check network connectivity and MongoDB cluster status.');
+    }
+    
     console.error('Stack trace:', error.stack);
     return false;
   }

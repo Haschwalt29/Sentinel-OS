@@ -40,10 +40,18 @@ const fetchAndClassifyGlobalNews = async () => {
       }
 
       // Prevent duplicate headlines
-      const existingThreat = await Threat.findOne({ title });
-      if (existingThreat) {
-        console.log(`🚫 Duplicate global threat found, skipping: "${title}"`);
-        continue;
+      try {
+        const existingThreat = await Threat.findOne({ title }).maxTimeMS(5000);
+        if (existingThreat) {
+          console.log(`🚫 Duplicate global threat found, skipping: "${title}"`);
+          continue;
+        }
+      } catch (dbError) {
+        if (dbError.message && dbError.message.includes('buffering')) {
+          console.error('❌ Error checking duplicates: Database connection not ready');
+          throw dbError;
+        }
+        throw dbError;
       }
       
       console.log(`🧠 Classifying global article: "${title}"`);
@@ -85,8 +93,16 @@ const fetchAndClassifyGlobalNews = async () => {
         url: article.url, // <-- Save the article URL
       });
 
-      await newThreat.save();
-      console.log(`✅ Successfully saved global threat: "${title}"`);
+      try {
+        await newThreat.save();
+        console.log(`✅ Successfully saved global threat: "${title}"`);
+      } catch (saveError) {
+        if (saveError.message && saveError.message.includes('buffering')) {
+          console.error('❌ Error saving global threat: Database connection not ready');
+          throw saveError;
+        }
+        throw saveError;
+      }
       
       // Emit socket event for real-time updates
       if (global.io) {
