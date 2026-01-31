@@ -65,9 +65,11 @@ const LiveFeed = ({ filters, setFilters }) => {
   const [threats, setThreats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [fetchError, setFetchError] = useState(null); // 503, timeout, or network error
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const res = await api.get('/ai/feed', {
         params: {
@@ -79,6 +81,14 @@ const LiveFeed = ({ filters, setFilters }) => {
       setThreats(res.data);
     } catch (err) {
       console.error("Failed to fetch live feed:", err);
+      const status = err.response?.status;
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
+      const isNetwork = err.message === 'Network Error' || err.code === 'ERR_NETWORK';
+      if (status === 503 || isTimeout || isNetwork) {
+        setFetchError('unavailable');
+      } else {
+        setFetchError('error');
+      }
       setThreats([]);
     } finally {
       setLoading(false);
@@ -233,11 +243,40 @@ const LiveFeed = ({ filters, setFilters }) => {
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex items-center justify-center h-32"
+            className="flex items-center justify-center h-32 px-4"
           >
             <div className="text-center">
-              <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-gray-500" />
-              <p className="text-sm text-gray-400">No threats detected</p>
+              {fetchError === 'unavailable' ? (
+                <>
+                  <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-amber-500" />
+                  <p className="text-sm text-gray-300 font-medium">Unable to load threat data</p>
+                  <p className="text-xs text-gray-500 mt-1">The service may be temporarily unavailable. Please try again in a moment.</p>
+                  <button
+                    type="button"
+                    onClick={() => fetchFeed()}
+                    className="mt-3 px-3 py-1.5 text-sm bg-cyber-600 hover:bg-cyber-500 text-white rounded transition-colors"
+                  >
+                    Try again
+                  </button>
+                </>
+              ) : fetchError === 'error' ? (
+                <>
+                  <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-amber-500" />
+                  <p className="text-sm text-gray-300">Something went wrong loading the feed.</p>
+                  <button
+                    type="button"
+                    onClick={() => fetchFeed()}
+                    className="mt-3 px-3 py-1.5 text-sm bg-cyber-600 hover:bg-cyber-500 text-white rounded transition-colors"
+                  >
+                    Try again
+                  </button>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-gray-500" />
+                  <p className="text-sm text-gray-400">No threats detected</p>
+                </>
+              )}
             </div>
           </motion.div>
         ) : (
