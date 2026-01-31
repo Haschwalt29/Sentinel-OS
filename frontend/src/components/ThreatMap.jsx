@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import Map, { Marker, Popup } from 'react-map-gl';
+import Map, { Marker, Popup, Source, Layer } from 'react-map-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import Supercluster from 'supercluster';
 import { Globe, Map as MapIcon, Layers, Info, AlertTriangle } from 'lucide-react';
@@ -26,7 +26,7 @@ const threatLevelStyles = {
   'No Threat': { bg: 'bg-threat-none', icon: 'text-threat-none' },
 };
 
-const ThreatMap = ({ filters }) => {
+const ThreatMap = ({ filters, searchQuery, searchCenter, searchFeature }) => {
   const [threats, setThreats] = useState([]);
   const [popupInfo, setPopupInfo] = useState(null);
   const [projection, setProjection] = useState('globe');
@@ -38,15 +38,31 @@ const ThreatMap = ({ filters }) => {
   const [clusters, setClusters] = useState(null);
   const [clusterId, setClusterId] = useState(null);
   const [showLegend, setShowLegend] = useState(true);
+  const [feedError, setFeedError] = useState(null); // 503, timeout, or network
   const navigate = useNavigate();
+  const [highlightGeoJson, setHighlightGeoJson] = useState(null);
+  const mapRef = useRef(null);
 
-  // Separate global and local threats
+  // Text query filtering
+  const normalizedQuery = useMemo(() => (searchQuery || '').trim().toLowerCase(), [searchQuery]);
+  const filteredThreats = useMemo(() => {
+    if (!normalizedQuery) return threats;
+    return threats.filter(t => {
+      const title = (t.title || '').toLowerCase();
+      const content = (t.content || '').toLowerCase();
+      const location = (t.location || '').toLowerCase();
+      // match any of the fields
+      return title.includes(normalizedQuery) || content.includes(normalizedQuery) || location.includes(normalizedQuery);
+    });
+  }, [threats, normalizedQuery]);
+
+  // Separate global and local threats from filtered list
   const globalThreats = useMemo(() => 
-    threats.filter(threat => threat.type === 'global'), [threats]
+    filteredThreats.filter(threat => threat.type === 'global'), [filteredThreats]
   );
   
   const localThreats = useMemo(() => 
-    threats.filter(threat => threat.type === 'local'), [threats]
+    filteredThreats.filter(threat => threat.type === 'local'), [filteredThreats]
   );
 
   // Create supercluster for local threats
@@ -95,26 +111,86 @@ const ThreatMap = ({ filters }) => {
     setClusters(clusters);
   }, [supercluster, viewState]);
 
-  useEffect(() => {
-    const fetchThreats = async () => {
-      try {
-        const res = await api.get('/ai/feed', {
-          params: {
-            threatLevel: filters.threatLevel === 'all' ? undefined : filters.threatLevel,
-            sortBy: filters.sortBy,
-            type: filters.type === 'all' ? undefined : filters.type,
-          },
-        });
-        console.log("[ThreatMap] Threats fetched from API:", res.data);
-        setThreats(res.data);
-      } catch (err) {
-        console.error("Failed to fetch threats for map:", err);
+  const fetchThreats = useCallback(async () => {
+    try {
+      setFeedError(null);
+      const res = await api.get('/ai/feed', {
+        params: {
+          threatLevel: filters.threatLevel === 'all' ? undefined : filters.threatLevel,
+          sortBy: filters.sortBy,
+          type: filters.type === 'all' ? undefined : filters.type,
+        },
+      });
+      console.log("[ThreatMap] Threats fetched from API:", res.data);
+      setThreats(res.data);
+    } catch (err) {
+      console.error("Failed to fetch threats for map:", err);
+      const status = err.response?.status;
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
+      const isNetwork = err.message === 'Network Error' || err.code === 'ERR_NETWORK';
+      if (status === 503 || isTimeout || isNetwork) {
+        setFeedError('unavailable');
+      } else {
+        setFeedError('error');
       }
-    };
+    }
+  }, [filters]);
+
+  useEffect(() => {
     fetchThreats();
     const interval = setInterval(fetchThreats, 30000);
     return () => clearInterval(interval);
-  }, [filters]);
+  }, [fetchThreats]);
+
+  // Pan/zoom map to searched center
+  useEffect(() => {
+    if (!searchCenter || !searchCenter.lng || !searchCenter.lat) return;
+    setViewState(prev => ({
+      ...prev,
+      longitude: searchCenter.lng,
+      latitude: searchCenter.lat,
+      zoom: 6,
+      transitionDuration: 1200
+    }));
+  }, [searchCenter]);
+
+  // Highlight searched feature boundary if provided
+  useEffect(() => {
+    if (!searchFeature) {
+      setHighlightGeoJson(null);
+      return;
+    }
+    
+    const geometry = searchFeature.geometry;
+    const bbox = searchFeature.bbox;
+    
+    // Only highlight if geometry is a polygon/multipolygon (not a point)
+    if (geometry && (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon')) {
+      setHighlightGeoJson({ 
+        type: 'FeatureCollection', 
+        features: [{ 
+          type: 'Feature', 
+          geometry,
+          properties: {}
+        }] 
+      });
+    } else {
+      setHighlightGeoJson(null);
+    }
+    
+    // Fit to bounds using map.fitBounds for proper zooming
+    if (bbox && bbox.length === 4 && mapRef.current) {
+      const [minX, minY, maxX, maxY] = bbox;
+      mapRef.current.fitBounds(
+        [[minX, minY], [maxX, maxY]],
+        { 
+          padding: 50,
+          duration: 1200,
+          maxZoom: 12
+        }
+      );
+    }
+  }, [searchFeature]);
 
   // Socket connection for real-time updates
   useEffect(() => {
@@ -208,6 +284,32 @@ const ThreatMap = ({ filters }) => {
 
   return (
     <div className="w-full h-full relative">
+      {/* Feed error banner */}
+      <AnimatePresence>
+        {feedError && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-20 glass-effect rounded-lg px-4 py-2 flex items-center gap-3 border border-amber-500/30"
+          >
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <span className="text-sm text-gray-200">
+              {feedError === 'unavailable'
+                ? 'Threat data temporarily unavailable. Retrying…'
+                : 'Failed to load threat data.'}
+            </span>
+            <button
+              type="button"
+              onClick={() => fetchThreats()}
+              className="text-sm text-cyber-400 hover:text-cyber-300 font-medium"
+            >
+              Retry
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Map Controls */}
       <motion.div 
         className="absolute top-4 right-4 z-10 space-y-2"
@@ -311,6 +413,7 @@ const ThreatMap = ({ filters }) => {
       </AnimatePresence>
 
       <Map
+        ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         style={{ width: '100%', height: '100%' }}
@@ -326,6 +429,29 @@ const ThreatMap = ({ filters }) => {
         
         {/* Local threat markers */}
         {localMarkers}
+
+        {/* Highlight searched feature boundary */}
+        {highlightGeoJson && (
+          <Source id="search-highlight" type="geojson" data={highlightGeoJson}>
+            <Layer
+              id="search-fill"
+              type="fill"
+              paint={{ 
+                'fill-color': '#38bdf8', 
+                'fill-opacity': 0.2 
+              }}
+            />
+            <Layer
+              id="search-outline"
+              type="line"
+              paint={{ 
+                'line-color': '#38bdf8', 
+                'line-width': 3,
+                'line-opacity': 0.8
+              }}
+            />
+          </Source>
+        )}
 
         {/* Popup */}
         {popupInfo && (
