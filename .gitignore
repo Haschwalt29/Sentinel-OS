@@ -1,1 +1,26 @@
-node_modules
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Production build artifacts
+dist/
+build/
+frontend/dist/
+
+# Local Environment files
+.env.local
+.env.dev
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.stackdump
+*.layout
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

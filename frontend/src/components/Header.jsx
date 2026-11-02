@@ -6,56 +6,96 @@ import {
   AlertTriangle, 
   Search, 
   Filter,
-  Sun,
-  Moon,
   X
 } from 'lucide-react';
 
-const Header = () => {
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
+
+const Header = ({ filters, setFilters, searchQuery, setSearchQuery, setSearchCenter, setSearchFeature }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  
-  // Mock data for search results - in a real app, this would come from an API
-  const mockThreats = [
-    { id: 1, title: 'Police watchdog clears Toronto police officers', location: 'Toronto, Ontario', type: 'No Threat' },
-    { id: 2, title: 'Letters to the editor, Aug. 17', location: 'Toronto, Sudbury', type: 'Medium Threat' },
-    { id: 3, title: "Sydney Sweeney's New Movie", location: 'Sydney, Australia', type: 'No Threat' },
-    { id: 4, title: 'Tragedy as two people die after falling from Sydney Harbour Bridge', location: 'Sydney Harbour Bridge', type: 'Medium Threat' },
-    { id: 5, title: "Sydney crime boss Bassam Hamzy's Belize jungle resort plan", location: 'Sydney, Belize', type: 'High Threat' },
-  ];
-  
-  // Apply theme changes when isDarkMode changes
+
+  // Autocomplete suggestions via Mapbox forward geocoding
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark-theme');
-      document.documentElement.classList.remove('light-theme');
-    } else {
-      document.documentElement.classList.add('light-theme');
-      document.documentElement.classList.remove('dark-theme');
-    }
-  }, [isDarkMode]);
-  
-  // Search functionality
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
+    const q = (searchQuery || '').trim();
+    if (!q || !MAPBOX_TOKEN) {
       setSearchResults([]);
       return;
     }
-    
-    const results = mockThreats.filter(threat => 
-      threat.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      threat.location.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    
-    setSearchResults(results);
+    const controller = new AbortController();
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}&limit=5`, { signal: controller.signal });
+        const data = await res.json();
+        const items = (data.features || []).map((f) => ({
+          id: f.id,
+          title: f.text,
+          location: f.place_name,
+          feature: f,
+        }));
+        setSearchResults(items);
+        setShowResults(true);
+      } catch (_) {
+        // ignore abort or network
+      }
+    }, 250); // debounce
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [searchQuery]);
-  const handleSearch = (e) => {
+
+  const handleSearch = async (e) => {
     e.preventDefault();
-    setShowResults(true);
-    // In a real app, you would trigger an API search here
+    const q = (searchQuery || '').trim();
+    if (!q) return;
+
+    setShowResults(false);
+    setSearchQuery(q);
+
+    // Try to parse coordinates: "lat, lng" or "lng, lat"
+    const coordMatch = q.match(/^\s*(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+    if (coordMatch) {
+      const a = parseFloat(coordMatch[1]);
+      const b = parseFloat(coordMatch[2]);
+      // Heuristic: latitude must be between -90..90
+      const isLatFirst = Math.abs(a) <= 90 && Math.abs(b) <= 180;
+      const lat = isLatFirst ? a : b;
+      const lng = isLatFirst ? b : a;
+      if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+        setSearchCenter({ lng, lat });
+        return;
+      }
+    }
+
+    // Fallback to geocoding via Mapbox
+    if (MAPBOX_TOKEN) {
+      try {
+        const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${MAPBOX_TOKEN}&limit=1`);
+        const data = await res.json();
+        if (data && data.features && data.features.length > 0) {
+          const feature = data.features[0];
+          const [lng, lat] = feature.center;
+          setSearchCenter({ lng, lat });
+          setSearchFeature(feature);
+        }
+      } catch (err) {
+        console.error('Geocoding failed:', err);
+      }
+    }
+  };
+
+  const handleSuggestionClick = (item) => {
+    setSearchQuery(item.location);
+    setShowResults(false);
+    const f = item.feature;
+    if (f && f.center) {
+      const [lng, lat] = f.center;
+      setSearchCenter({ lng, lat });
+      setSearchFeature(f);
+    }
   };
   
   const clearSearch = () => {
@@ -63,6 +103,7 @@ const Header = () => {
     setSearchResults([]);
     setShowResults(false);
   };
+
   const threatLevels = [
     { label: 'All', value: 'all', color: 'bg-gray-500' },
     { label: 'High', value: 'High Threat', color: 'bg-threat-high' },
@@ -140,24 +181,16 @@ const Header = () => {
             {showResults && searchResults.length > 0 && (
               <div className="absolute w-full mt-2 bg-dark-800/95 border border-cyber-500/30 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
                 <div className="p-2">
-                  <div className="text-xs text-gray-400 mb-2">Search Results</div>
+                  <div className="text-xs text-gray-400 mb-2">Suggestions</div>
                   <div className="space-y-1">
-                    {searchResults.map(result => (
+                    {searchResults.map(item => (
                       <div 
-                        key={result.id}
+                        key={item.id}
+                        onClick={() => handleSuggestionClick(item)}
                         className="p-2 hover:bg-dark-700/50 rounded cursor-pointer transition-colors"
                       >
-                        <div className="text-sm text-gray-200">{result.title}</div>
-                        <div className="flex justify-between items-center mt-1">
-                          <div className="text-xs text-gray-400">{result.location}</div>
-                          <div className={`text-xs px-1.5 py-0.5 rounded ${
-                            result.type === 'High Threat' ? 'bg-threat-high/20 text-threat-high' :
-                            result.type === 'Medium Threat' ? 'bg-threat-medium/20 text-threat-medium' :
-                            'bg-threat-none/20 text-threat-none'
-                          }`}>
-                            {result.type}
-                          </div>
-                        </div>
+                        <div className="text-sm text-gray-200">{item.title}</div>
+                        <div className="text-xs text-gray-400">{item.location}</div>
                       </div>
                     ))}
                   </div>
@@ -199,7 +232,10 @@ const Header = () => {
                         {threatLevels.map((level) => (
                           <button
                             key={level.value}
-                            className={`px-2 py-1 text-xs rounded-md transition-all ${level.color} text-white hover:opacity-80`}
+                            onClick={() => setFilters(prev => ({ ...prev, threatLevel: level.value }))}
+                            className={`px-2 py-1 text-xs rounded-md transition-all ${level.color} text-white hover:opacity-80 ${
+                              filters.threatLevel === level.value ? 'ring-2 ring-white ring-opacity-50' : ''
+                            }`}
                           >
                             {level.label}
                           </button>
@@ -212,7 +248,12 @@ const Header = () => {
                         {threatTypes.map((type) => (
                           <button
                             key={type.value}
-                            className="flex items-center space-x-1 px-2 py-1 text-xs bg-cyber-600/50 text-cyber-200 rounded-md hover:bg-cyber-600/70 transition-all"
+                            onClick={() => setFilters(prev => ({ ...prev, type: type.value }))}
+                            className={`flex items-center space-x-1 px-2 py-1 text-xs rounded-md transition-all ${
+                              filters.type === type.value 
+                                ? 'bg-cyber-600 text-white ring-2 ring-cyber-300 ring-opacity-50' 
+                                : 'bg-cyber-600/50 text-cyber-200 hover:bg-cyber-600/70'
+                            }`}
                           >
                             <type.icon className="w-3 h-3" />
                             <span>{type.label}</span>
@@ -224,17 +265,6 @@ const Header = () => {
                 </motion.div>
               )}
             </div>
-
-
-            {/* Dark Mode Toggle */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 bg-dark-800/50 border border-cyber-500/30 rounded-lg text-gray-300 hover:bg-dark-700/50 transition-all"
-            >
-              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </motion.button>
           </motion.div>
         </div>
       </div>
@@ -242,4 +272,4 @@ const Header = () => {
   );
 };
 
-export default Header; 
+export default Header;

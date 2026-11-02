@@ -1,38 +1,45 @@
 const cron = require('node-cron');
 const axios = require('axios');
-const { classifyText } = require('./aiService');
+const { classifyText, extractLocations } = require('./aiService');
 const Threat = require('../models/Threat');
-const { getRandomCoordinates } = require('../utils/countryCoordinates');
+const { getLocationCoordinates } = require('../utils/geocode');
 const { ensureConnection } = require('../utils/dbHelper');
 
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 
 const fetchAndClassifyNews = async () => {
+  if (!NEWS_API_KEY) {
+    console.log('⚠️  NEWS_API_KEY is missing. Skipping news ingestion.');
+    return;
+  }
+
   console.log('📰 Starting news ingestion cycle...');
-  
+
   // Check database connection before proceeding
   const isConnected = await ensureConnection(5000);
   if (!isConnected) {
     console.error('❌ Database not connected, skipping news ingestion');
     return;
   }
-  
+
   try {
     const response = await axios.get(`https://newsapi.org/v2/top-headlines`, {
       params: {
         language: 'en',
-        pageSize: 10, // Fetch a few more to increase chances of finding unique ones
+        pageSize: 10,
         apiKey: NEWS_API_KEY,
-        q: 'war OR conflict OR attack OR cyberattack OR crisis OR disaster' // Keywords to get relevant news
-      }
+        q: 'war OR conflict OR attack OR cyberattack OR crisis OR disaster'
+      },
+      timeout: 10000
     });
 
-    const articles = response.data.articles;
+    const articles = response.data?.articles || [];
 
     for (const article of articles) {
-      const { title, content } = article;
+      const { title, content, description } = article;
+      const articleContent = content || description;
 
-      if (!title || !content) {
+      if (!title || !articleContent) {
         console.log(`⏩ Skipping article with no title or content.`);
         continue;
       }
@@ -51,26 +58,42 @@ const fetchAndClassifyNews = async () => {
         }
         throw dbError;
       }
-      
+
       console.log(`🧠 Classifying article: "${title}"`);
       // 2. Classify text using existing service
-      const classificationResult = await classifyText(title, content);
-      
+      const classificationResult = await classifyText(title, articleContent);
+
       if (!classificationResult || !classificationResult.prediction) {
-          console.error(`❌ Failed to classify article: "${title}"`);
-          continue;
+        console.error(`❌ Failed to classify article: "${title}"`);
+        continue;
       }
-      
-      // 3. Get coordinates (dummy for now)
-      const coordinates = getRandomCoordinates();
+
+      // 3. Extract location & geocode (never assign random coordinates)
+      const locations = await extractLocations(articleContent);
+      let coordinates = null;
+      let region = 'Global';
+
+      if (locations && locations.length > 0) {
+        for (const loc of locations) {
+          const coords = await getLocationCoordinates(loc);
+          if (coords) {
+            coordinates = coords;
+            region = loc;
+            break;
+          }
+        }
+      }
 
       // 4. Save to database
       const newThreat = new Threat({
         title,
-        content,
+        content: articleContent,
         threatLevel: classificationResult.prediction,
         confidence: classificationResult.confidence,
+        type: 'global',
+        region,
         coordinates,
+        url: article.url,
       });
 
       try {
@@ -83,7 +106,7 @@ const fetchAndClassifyNews = async () => {
         }
         throw saveError;
       }
-      
+
       // 5. Emit socket event for real-time updates
       if (global.io) {
         global.io.emit('new-threat', newThreat);
@@ -93,7 +116,7 @@ const fetchAndClassifyNews = async () => {
 
   } catch (error) {
     if (error.response) {
-      console.error('❌ NewsAPI request failed:', error.response.data);
+      console.error('❌ NewsAPI request failed:', error.response.status, error.response.data?.message || error.response.statusText);
     } else {
       console.error('❌ An error occurred during news ingestion:', error.message);
     }
@@ -101,15 +124,10 @@ const fetchAndClassifyNews = async () => {
   console.log('🔄 News ingestion cycle finished.');
 };
 
-
 const startNewsIngestionService = () => {
-  // Run every 10 minutes
-  cron.schedule('*/10 * * * *', fetchAndClassifyNews);
-  
-  // Also run once on startup, after a short delay
-  setTimeout(fetchAndClassifyNews, 5000); 
-
-  console.log('⏰ News ingestion service scheduled to run every 10 minutes.');
+  // Run every 30 minutes
+  cron.schedule('*/30 * * * *', fetchAndClassifyNews);
+  console.log('⏰ News ingestion service scheduled.');
 };
 
-module.exports = { startNewsIngestionService }; 
+module.exports = { startNewsIngestionService, fetchAndClassifyNews };

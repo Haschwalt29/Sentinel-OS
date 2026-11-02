@@ -3,10 +3,11 @@ import axios from 'axios';
 // Determine the base URL based on environment
 const getBaseURL = () => {
   if (import.meta.env.PROD) {
-    // In production, use the actual Render backend URL
-    return 'https://sentinel-os.onrender.com/api';
+    const raw = import.meta.env.VITE_BACKEND_URL || 'https://sentinel-os.onrender.com';
+    const clean = raw.trim().replace(/\/+$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
   } else {
-    // In development, use the proxy
+    // In development, use the Vite proxy
     return '/api';
   }
 };
@@ -40,4 +41,4 @@ api.interceptors.response.use(
   }
 );
 
-export default api; 
+export default api;
