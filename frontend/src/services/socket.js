@@ -14,8 +14,8 @@ class SocketService {
     // Determine the socket URL based on environment
     const getSocketURL = () => {
       if (import.meta.env.PROD) {
-        // In production, use the actual Render backend URL
-        return 'https://sentinel-os.onrender.com';
+        const raw = import.meta.env.VITE_BACKEND_URL || 'https://sentinel-os.onrender.com';
+        return raw.trim().replace(/\/api$/, '').replace(/\/+$/, '');
       } else {
         // In development, use localhost
         return 'http://localhost:5000';
@@ -91,4 +91,4 @@ class SocketService {
   }
 }
 
-export default new SocketService(); 
+export default new SocketService();

@@ -1,16 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const mongoose = require('mongoose');
-const { askCohere } = require("../services/aiService");
+const { askCohere, askAI } = require("../services/aiService");
 const ThreatReport = require('../models/ThreatReport');
 const { classifyNews } = require('../controllers/aiController');
 const Threat = require('../models/Threat');
+const { ensureConnection } = require('../utils/dbHelper');
 
 router.post("/ask", async (req, res) => {
   const { prompt } = req.body;
   if (!prompt) return res.status(400).json({ error: "Missing prompt" });
 
-  const answer = await askCohere(prompt);
+  const aiHandler = askCohere || askAI;
+  const answer = await aiHandler(prompt);
   res.json({ answer });
 });
 
@@ -48,13 +50,14 @@ router.get('/feed', async (req, res) => {
   try {
     console.log('[DEBUG] /api/ai/feed called with query:', req.query);
     
-    // Check database connection state
-    if (mongoose.connection.readyState !== 1) {
+    // Ensure database connection is ready, attempting connection if not ready (up to 4s)
+    const isConnected = await ensureConnection(4000);
+    if (!isConnected || mongoose.connection.readyState !== 1) {
       clearTimeout(timeout);
       console.error('[ERROR] Database not connected. ReadyState:', mongoose.connection.readyState);
       return res.status(503).json({ 
         error: 'Database not available', 
-        message: 'Database connection is not established. Please check server logs.',
+        message: 'Database connection is not established. Please try again shortly.',
         readyState: mongoose.connection.readyState
       });
     }
@@ -65,7 +68,7 @@ router.get('/feed', async (req, res) => {
       timeRange = 'all',
       sortBy = 'createdAt', 
       order = 'desc',
-      type // New parameter for filtering by type
+      type // Parameter for filtering by type (global/local)
     } = req.query;
 
     let query = Threat.find();
@@ -75,11 +78,10 @@ router.get('/feed', async (req, res) => {
       query = query.where('type').equals(type);
     }
     
-    // 2. Filter by threatLevel
+    // 2. Filter by threatLevel (High, Medium, Low, No Threat)
     if (threatLevel && threatLevel !== 'all') {
-      // Ensure the value is one of the allowed types to prevent NoSQL injection
-      const allowedLevels = ["High Threat", "Medium Threat", "No Threat"];
-      if(allowedLevels.includes(threatLevel)) {
+      const allowedLevels = ["High Threat", "Medium Threat", "Low Threat", "No Threat"];
+      if (allowedLevels.includes(threatLevel)) {
         query = query.where('threatLevel').equals(threatLevel);
       } else {
         clearTimeout(timeout);
@@ -129,11 +131,11 @@ router.get('/feed', async (req, res) => {
 
     // 6. Apply limit and add maxTimeMS to prevent long-running queries
     console.log('[DEBUG] Final Mongoose query:', JSON.stringify(query.getQuery()), 'sort:', sortOptions);
-    const threats = await query.limit(50).maxTimeMS(7000).exec(); // 7 second max query time
+    const threats = await query.limit(50).maxTimeMS(7000).exec();
     console.log('[DEBUG] Threats fetched:', threats.length);
     
     clearTimeout(timeout);
-    res.json(threats);
+    res.status(200).json(threats || []);
     
   } catch (err) {
     clearTimeout(timeout);
@@ -156,6 +158,11 @@ router.get('/feed', async (req, res) => {
 // GET /api/ai/region-heatmap
 router.get('/region-heatmap', async (req, res) => {
   try {
+    const isConnected = await ensureConnection(4000);
+    if (!isConnected) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
     const heatmapData = await Threat.aggregate([
       {
         $group: {
@@ -189,10 +196,14 @@ router.get('/region-heatmap', async (req, res) => {
   }
 });
 
-// ✅ Dev-only route to seed sample threats
+// Dev-only route to seed sample threats
 router.post("/seed-threats", async (req, res) => {
   try {
-    // Clear existing threats to ensure a clean slate
+    const isConnected = await ensureConnection(4000);
+    if (!isConnected) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
     await Threat.deleteMany({});
     
     const sampleThreatsData = [
@@ -252,15 +263,12 @@ router.post("/seed-threats", async (req, res) => {
       },
     ];
 
-    // Create new Threat models instance by instance to ensure schema is applied
     const threatPromises = sampleThreatsData.map(threatData => {
         const threat = new Threat(threatData);
-        console.log('Mongoose document before save:', JSON.stringify(threat, null, 2));
         return threat.save();
     });
 
     await Promise.all(threatPromises);
-
     res.status(200).json({ message: "🌍 Sample threats seeded successfully!" });
   } catch (error) {
     console.error("Seed error:", error);
@@ -268,9 +276,14 @@ router.post("/seed-threats", async (req, res) => {
   }
 });
 
-// ✅ Dev-only route to seed local threats
+// Dev-only route to seed local threats
 router.post("/seed-local", async (req, res) => {
   try {
+    const isConnected = await ensureConnection(4000);
+    if (!isConnected) {
+      return res.status(503).json({ error: 'Database not available' });
+    }
+
     const sampleLocalThreatsData = [
       {
         title: "Traffic accident on Main Street",
@@ -328,14 +341,12 @@ router.post("/seed-local", async (req, res) => {
       },
     ];
 
-    // Create new Threat models for local threats
     const threatPromises = sampleLocalThreatsData.map(threatData => {
         const threat = new Threat(threatData);
         return threat.save();
     });
 
     await Promise.all(threatPromises);
-
     res.status(200).json({ message: "🏘️ Sample local threats seeded successfully!" });
   } catch (error) {
     console.error("Seed local error:", error);

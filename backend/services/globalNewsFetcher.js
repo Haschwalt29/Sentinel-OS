@@ -8,6 +8,11 @@ const { ensureConnection } = require('../utils/dbHelper');
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 
 const fetchAndClassifyGlobalNews = async () => {
+  if (!NEWS_API_KEY) {
+    console.log('⚠️  NEWS_API_KEY is missing. Skipping global news fetch.');
+    return;
+  }
+
   console.log('🌍 Starting global news ingestion cycle...');
   
   // Check database connection before proceeding
@@ -24,10 +29,11 @@ const fetchAndClassifyGlobalNews = async () => {
         pageSize: 15,
         apiKey: NEWS_API_KEY,
         q: 'war OR conflict OR attack OR cyberattack OR crisis OR disaster OR terrorism OR political OR economic OR military'
-      }
+      },
+      timeout: 10000
     });
 
-    const articles = response.data.articles;
+    const articles = response.data?.articles || [];
     let processedCount = 0;
 
     for (const article of articles) {
@@ -90,7 +96,7 @@ const fetchAndClassifyGlobalNews = async () => {
         type: 'global',
         region: region || 'Global',
         coordinates,
-        url: article.url, // <-- Save the article URL
+        url: article.url,
       });
 
       try {
@@ -117,7 +123,7 @@ const fetchAndClassifyGlobalNews = async () => {
 
   } catch (error) {
     if (error.response) {
-      console.error('❌ Global NewsAPI request failed:', error.response.data);
+      console.error('❌ Global NewsAPI request failed:', error.response.status, error.response.data?.message || error.response.statusText);
     } else {
       console.error('❌ An error occurred during global news ingestion:', error.message);
     }
@@ -125,13 +131,13 @@ const fetchAndClassifyGlobalNews = async () => {
 };
 
 const startGlobalNewsFetcher = () => {
-  // Run every 2 minutes
-  cron.schedule('*/2 * * * *', fetchAndClassifyGlobalNews);
+  // Run every 15 minutes to stay within NewsAPI developer tier quotas
+  cron.schedule('*/15 * * * *', fetchAndClassifyGlobalNews);
   
   // Also run once on startup, after a short delay
   setTimeout(fetchAndClassifyGlobalNews, 10000); 
 
-  console.log('⏰ Global news fetcher scheduled to run every 2 minutes.');
+  console.log('⏰ Global news fetcher scheduled to run every 15 minutes.');
 };
 
-module.exports = { startGlobalNewsFetcher, fetchAndClassifyGlobalNews }; 
+module.exports = { startGlobalNewsFetcher, fetchAndClassifyGlobalNews };

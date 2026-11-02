@@ -3,21 +3,18 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const mongoose = require('mongoose');
 
 // Load env vars - try multiple environment files
 try {
-  // Try .env.dev first (for development)
   dotenv.config({ path: __dirname + '/.env.dev' });
 } catch (error) {
   try {
-    // Try .env.local (alternative local file)
     dotenv.config({ path: __dirname + '/.env.local' });
   } catch (error2) {
     try {
-      // Try .env (standard file)
       dotenv.config({ path: __dirname + '/.env' });
     } catch (error3) {
-      // If no env files exist, use default dotenv behavior
       dotenv.config();
     }
   }
@@ -47,15 +44,13 @@ if (missingEnvVars.length > 0) {
 const { connectDB, waitForConnection } = require('./config/db');
 
 // Import news services (but don't start them if database is not available)
-let startNewsIngestionService, startGlobalNewsFetcher, startLocalNewsFetcher;
+let startGlobalNewsFetcher, startLocalNewsFetcher;
 
 if (process.env.MONGODB_URI) {
   try {
-    const newsIngestionService = require('./services/newsIngestionService');
     const globalNewsFetcher = require('./services/globalNewsFetcher');
     const localNewsFetcher = require('./services/localNewsFetcher');
     
-    startNewsIngestionService = newsIngestionService.startNewsIngestionService;
     startGlobalNewsFetcher = globalNewsFetcher.startGlobalNewsFetcher;
     startLocalNewsFetcher = localNewsFetcher.startLocalNewsFetcher;
   } catch (error) {
@@ -64,49 +59,49 @@ if (process.env.MONGODB_URI) {
 }
 
 // Connect to database and start services asynchronously
-let dbConnected = false;
+let servicesStarted = false;
+
+function startBackgroundServices() {
+  if (servicesStarted) return;
+  servicesStarted = true;
+  console.log('🚀 Starting background ingestion services...');
+
+  if (startGlobalNewsFetcher) {
+    try {
+      startGlobalNewsFetcher();
+      console.log('✅ Global news fetcher scheduled');
+    } catch (error) {
+      console.error('❌ Failed to start global news fetcher:', error.message);
+    }
+  }
+  
+  if (startLocalNewsFetcher) {
+    try {
+      startLocalNewsFetcher();
+      console.log('✅ Local news fetcher scheduled');
+    } catch (error) {
+      console.error('❌ Failed to start local news fetcher:', error.message);
+    }
+  }
+}
+
+// Ensure services start when database connects (either immediately or upon reconnect)
+mongoose.connection.on('connected', () => {
+  startBackgroundServices();
+});
+
 if (process.env.MONGODB_URI) {
   (async () => {
     try {
       const connected = await connectDB();
       if (connected) {
-        // Wait for connection to be fully ready
-        await waitForConnection(30000); // Wait up to 30 seconds
-        dbConnected = true;
         console.log('✅ Database connection confirmed, starting services...');
-        
-        // Start the news ingestion services only after database is connected
-        if (startNewsIngestionService) {
-          try {
-            startNewsIngestionService();
-            console.log('✅ News ingestion service started');
-          } catch (error) {
-            console.error('❌ Failed to start news ingestion service:', error.message);
-          }
-        }
-        
-        if (startGlobalNewsFetcher) {
-          try {
-            startGlobalNewsFetcher();
-            console.log('✅ Global news fetcher started');
-          } catch (error) {
-            console.error('❌ Failed to start global news fetcher:', error.message);
-          }
-        }
-        
-        if (startLocalNewsFetcher) {
-          try {
-            startLocalNewsFetcher();
-            console.log('✅ Local news fetcher started');
-          } catch (error) {
-            console.error('❌ Failed to start local news fetcher:', error.message);
-          }
-        }
+        startBackgroundServices();
       } else {
-        console.error('❌ Database connection failed, services will not start');
+        console.log('⏳ Database not ready immediately; background retry will establish connection.');
       }
     } catch (error) {
-      console.error('❌ Error during database connection:', error.message);
+      console.error('❌ Error during initial database connection attempt:', error.message);
     }
   })();
 } else {
@@ -120,21 +115,15 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin: function(origin, callback) {
-      // Get the configured frontend URL from environment variable
       let allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
-      
-      // Normalize the allowedOrigin (remove trailing slash if present)
       allowedOrigin = allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin;
       
-      // Create versions with and without trailing slash
       const originsToAllow = [
         allowedOrigin,
         allowedOrigin + '/'
       ];
       
-      // Allow requests with no origin (like mobile apps, curl, postman)
       if (!origin || originsToAllow.includes(origin)) {
-        // Return the actual requesting origin, not a wildcard
         callback(null, origin);
       } else {
         console.log(`Socket.IO CORS blocked request from: ${origin}`);
@@ -164,21 +153,15 @@ app.use(express.json());
 // Enable CORS with dynamic origin
 app.use(cors({
   origin: function(origin, callback) {
-    // Get the configured frontend URL from environment variable
     let allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
-    
-    // Normalize the allowedOrigin (remove trailing slash if present)
     allowedOrigin = allowedOrigin.endsWith('/') ? allowedOrigin.slice(0, -1) : allowedOrigin;
     
-    // Create versions with and without trailing slash
     const originsToAllow = [
       allowedOrigin,
       allowedOrigin + '/'
     ];
     
-    // Allow requests with no origin (like mobile apps, curl, postman)
     if (!origin || originsToAllow.includes(origin)) {
-      // Return the actual requesting origin, not a wildcard
       callback(null, origin);
     } else {
       console.log(`CORS blocked request from: ${origin}`);
@@ -190,41 +173,41 @@ app.use(cors({
 
 // Root endpoint
 app.get('/', (req, res) => {
+  const isDbConnected = mongoose.connection.readyState === 1;
   res.json({
     message: 'Sentinel OS API',
     version: '1.0.0',
-    status: 'running',
+    status: isDbConnected ? 'running' : 'degraded',
     timestamp: new Date().toISOString(),
     endpoints: {
       health: '/health',
       api: '/api',
-      articles: '/api/articles',
-      regions: '/api/regions',
-      region: '/api/region/:code',
-      fetchNews: '/api/fetch-news',
-      testThreats: '/api/test-threats',
-      testOpencage: '/api/test-opencage',
-      ai: '/api/ai',
+      aiFeed: '/api/ai/feed',
+      aiAsk: '/api/ai/ask',
+      classifyNews: '/api/ai/classify-news',
       admin: '/api/admin'
     },
     environment: process.env.NODE_ENV || 'development',
-    database: !!process.env.MONGODB_URI,
+    database: isDbConnected,
+    dbReadyState: mongoose.connection.readyState,
     missingEnvVars: missingEnvVars
   });
 });
 
 // Health check endpoint for Render
 app.get('/health', (req, res) => {
+  const isDbConnected = mongoose.connection.readyState === 1;
   res.status(200).json({ 
-    status: 'OK', 
+    status: isDbConnected ? 'OK' : 'DEGRADED', 
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    database: !!process.env.MONGODB_URI,
+    database: isDbConnected,
+    dbReadyState: mongoose.connection.readyState,
     missingEnvVars: missingEnvVars
   });
 });
 
-// Mount routers only if database is available
+// Mount routers only if database is configured
 if (process.env.MONGODB_URI) {
   app.use('/api', require('./routes/api'));
   console.log('✅ API routes mounted');
@@ -251,11 +234,7 @@ server.listen(PORT, () => {
 });
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (err, promise) => {
+process.on('unhandledRejection', (err) => {
   console.log(`❌ Unhandled Rejection: ${err.message}`);
-  // Don't exit the process, just log the error
   console.log('Stack trace:', err.stack);
-}); 
-
-
-//
+});

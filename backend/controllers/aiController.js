@@ -1,6 +1,6 @@
 const { classifyText, extractLocations } = require('../services/aiService');
 const Threat = require('../models/Threat');
-const { geocodeLocation } = require('../utils/geocode');
+const { geocodeLocation, getLocationCoordinates } = require('../utils/geocode');
 
 // POST /api/ai/classify-news
 async function classifyNews(req, res) {
@@ -27,10 +27,10 @@ async function classifyNews(req, res) {
     let coordinates = null;
     let finalRegion = region;
 
-    // 3. Geocode the first valid location found
+    // 3. Geocode the first valid location found (with fallback coordinates)
     if (locations && locations.length > 0) {
       for (const loc of locations) {
-        const coords = await geocodeLocation(loc);
+        const coords = await getLocationCoordinates(loc);
         if (coords) {
           coordinates = coords;
           if (!finalRegion) {
@@ -77,4 +77,4 @@ async function classifyNews(req, res) {
 
 module.exports = {
   classifyNews,
-}; 
+};
